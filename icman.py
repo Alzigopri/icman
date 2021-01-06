@@ -266,6 +266,10 @@ class IcMan:
     def _LoadConfigs(self):
 
         self.configs = {}
+
+        if not os.path.exists(CONFIG_DIR):
+            subprocess.run(f'mkdir -p {CONFIG_DIR}', shell=True, check=True)
+
         conf_dir = CONFIG_DIR + "/"
 
         files = glob.glob(conf_dir + "*." + DATA_FILE_EXT)
