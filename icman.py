@@ -50,7 +50,7 @@ HDR2 = f'metadata::{NIC_HDR}'
 MON_HDR = 'monitor'
 HDR3 = f'metadata::{MON_HDR}'
 
-DESK_MON_HDR='desktop-monitor'
+DESK_MON_HDR = 'desktop-monitor'
 
 LHDR1 = len(HDR1)
 LNIC_HDR = len(NIC_HDR)
@@ -351,7 +351,6 @@ class IcMan:
         icons = []
         id = {}
         skip_block = False
-        processing_block = False
 
         h1_present = False
         h2_present = False
@@ -402,7 +401,8 @@ class IcMan:
                     if s.startswith(NIC_HDR + '='):
 
                         if h2_present:
-                            raise RuntimeError(f'{fp_} {E_GEN}\n line({lc}): {s}')
+                            raise RuntimeError(
+                                f'{fp_} {E_GEN}\n line({lc}): {s}')
 
                         v2 = s[LNIC_HDR + 1:].split(',')
                         id.x = int(v2[0])
@@ -415,7 +415,8 @@ class IcMan:
                     if s.startswith(MON_HDR + '='):
 
                         if h3_present:
-                            raise RuntimeError(f'{fp_} {E_GEN}\n line({lc}): {s}')
+                            raise RuntimeError(
+                                f'{fp_} {E_GEN}\n line({lc}): {s}')
 
                         v3 = s[LMON_HDR + 1:]
                         id.m = int(v3)
@@ -429,7 +430,7 @@ class IcMan:
 
         return icons
 
-    def _ApplyNemoMetaDesktop(fp_, meta_icons_):
+    def _ApplyNemoMetaDesktop(fp_, meta_icons_, mon_cnt_):
         if len(meta_icons_) == 0:
             return
 
@@ -438,6 +439,7 @@ class IcMan:
             meta_dict[o.name] = o
 
         out_line = []
+        lines = []
         skip_block = False
         processing_block = False
         curr_o = IconData({})
@@ -446,56 +448,58 @@ class IcMan:
             lc = 0
             with open(fp_, 'rt') as file1:
                 lines = file1.readlines()
-                for line in lines:
-                    lc += 1
-                    s = line.strip()
-
-                    if(len(s) == 0):
-                        processing_block = False
-                        out_line.append('\n')
-                        # print('0>>> ' + out_line[len(out_line) - 1])
-                        continue
-
-                    if skip_block:
-                        if not s.startswith('['):
-                            out_line.append(s + '\n')
-                            # print('1>>> ' + out_line[len(out_line) - 1])
-                            continue
-                        else:
-                            skip_block = False
-
-                    if s.startswith("[desktop-monitor"):
-                        skip_block = True
-                        out_line.append(s + '\n')
-                        # print('2>>> ' + out_line[len(out_line) - 1])
-                        continue
-
-                    if s.startswith("["):
-                        processing_block = True
-                        n = s.strip('[]')
-
-                        if n not in meta_dict:
-                            skip_block = True
-                            out_line.append(s + '\n')
-                            # print('3>>> ' + out_line[len(out_line) - 1])
-                            continue
-                        else:
-                            curr_o = meta_dict[n]
-
-                    if not processing_block:
-                        raise RuntimeError(f'{fp_} {E_GEN}\n line({lc}): {s}')
-
-                    if s.startswith(NIC_HDR + '='):
-                        out_line.append(f'{NIC_HDR}={curr_o.x},{curr_o.y}\n')
-                        # print('4>>> ' + out_line[len(out_line) - 1])
-                    elif s.startswith(MON_HDR + '='):
-                        out_line.append(f'{MON_HDR}={curr_o.m}\n')
-                    else:
-                        out_line.append(s + '\n')
-                        # print('5>>> ' + out_line[len(out_line) - 1])
-
         except Exception as e:
             print(f'_LoadNemoMetaIcons read exception:\n{e}')
+            return
+
+        for line in lines:
+            lc += 1
+            s = line.strip()
+
+            if(len(s) == 0):
+                processing_block = False
+                out_line.append('\n')
+                # print('0>>> ' + out_line[len(out_line) - 1])
+                continue
+
+            if skip_block:
+                if not s.startswith('['):
+                    out_line.append(s + '\n')
+                    # print('1>>> ' + out_line[len(out_line) - 1])
+                    continue
+                else:
+                    skip_block = False
+
+            if s.startswith("[desktop-monitor"):
+                skip_block = True
+                out_line.append(s + '\n')
+                # print('2>>> ' + out_line[len(out_line) - 1])
+                continue
+
+            if s.startswith("["):
+                processing_block = True
+                n = s.strip('[]')
+
+                if n not in meta_dict:
+                    skip_block = True
+                    out_line.append(s + '\n')
+                    # print('3>>> ' + out_line[len(out_line) - 1])
+                    continue
+                else:
+                    curr_o = meta_dict[n]
+
+            if not processing_block:
+                raise RuntimeError(f'{fp_} {E_GEN}\n line({lc}): {s}')
+
+            if s.startswith(NIC_HDR + '='):
+                out_line.append(f'{NIC_HDR}={curr_o.x},{curr_o.y}\n')
+                # print('4>>> ' + out_line[len(out_line) - 1])
+            elif s.startswith(MON_HDR + '='):
+                mon = curr_o.m if curr_o.m < mon_cnt_ else 0
+                out_line.append(f'{MON_HDR}={mon}\n')
+            else:
+                out_line.append(s + '\n')
+                # print('5>>> ' + out_line[len(out_line) - 1])
 
         if len(out_line) > 0:
             with open(fp_, "wt") as outf:
@@ -549,10 +553,13 @@ class IcMan:
     def ApplyConfig(self, name_):
 
         if name_ not in self.configs:
+            print(f'Invalid condig name: {name_}')
             return
 
         icons = self.configs[name_]
         meta_icons = []
+        monitors = GetMonitorsInfo()
+        mon_cnt = len(monitors)
 
         IcMan._KillNemoDesktop()
         for o in icons:
@@ -560,14 +567,15 @@ class IcMan:
             if o.fp != META_PATH_HOLDER:
                 cmd = GIO_SET_ICONS_POS_CMD_TPL.format(o.fp, o.x, o.y)
                 subprocess.run(cmd, shell=True)
-                cmd = GIO_SET_ICONS_MON_CMD_TPL.format(o.fp, o.m)
+                mon = o.m if o.m < mon_cnt else 0
+                cmd = GIO_SET_ICONS_MON_CMD_TPL.format(o.fp, mon)
                 subprocess.run(cmd, shell=True)
             else:
                 meta_icons.append(o)
 
             # IcMan.ShakeIcon(o.fp)
 
-        IcMan._ApplyNemoMetaDesktop(NEMO_META_PATH, meta_icons)
+        IcMan._ApplyNemoMetaDesktop(NEMO_META_PATH, meta_icons, mon_cnt)
         IcMan._StartNemoDesktop()
 
     def GetConfigFullPath(name_):
