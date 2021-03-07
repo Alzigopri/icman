@@ -15,6 +15,7 @@ import glob
 import tempfile
 import shutil
 import datetime
+import time
 
 import ctypes.util
 
@@ -232,7 +233,6 @@ def gfjn(fp_):
 
 
 class IcMan:
-
     configs = {}
 
     def __init__(self):
@@ -248,7 +248,6 @@ class IcMan:
         return fp
 
     def _LoadIconConf(fp_):
-
         data = []
         try:
             with open(fp_, "rt") as inf:
@@ -264,7 +263,6 @@ class IcMan:
         return icons
 
     def _LoadConfigs(self):
-
         self.configs = {}
 
         if not os.path.exists(CONFIG_DIR):
@@ -283,7 +281,6 @@ class IcMan:
             json.dump(icons_, outf, indent=2, default=vars)
 
     def _LoadCurentIcons():
-
         icons = []
         id = {}
 
@@ -346,113 +343,97 @@ class IcMan:
 
         return icons
 
-    def _LoadNemoMetaIcons(fp_):
-
+    def _ProcessLines_LoadNemoMetaIcons(lines_):
         icons = []
         id = {}
         skip_block = False
-
         h1_present = False
         h2_present = False
         h3_present = False
+        lc = 0
 
+        for line in lines_:
+            lc += 1
+            s = line.strip()
+
+            if(len(s) == 0):
+                h1_present = False
+                h2_present = False
+                h3_present = False
+                continue
+
+            if skip_block:
+                if not s.startswith('['):
+                    continue
+                else:
+                    skip_block = False
+
+            if s.startswith(f'[{DESK_MON_HDR}'):
+                skip_block = True
+                h1_present = False
+                h2_present = False
+                h3_present = False
+                continue
+
+            if s.startswith("["):
+                h1_present = True
+                h2_present = False
+                h3_present = False
+
+                n = s.strip('[]')
+                id = IconData({})
+                id.fp = META_PATH_HOLDER
+                id.name = n
+                continue
+
+            if not h1_present:
+                raise RuntimeError(f'{fp_} {E_GEN}\n line({lc}): {s}')
+
+            if s.startswith(NIC_HDR + '='):
+                if h2_present:
+                    raise RuntimeError(
+                        f'{fp_} {E_GEN}\n line({lc}): {s}')
+
+                v2 = s[LNIC_HDR + 1:].split(',')
+                id.x = int(v2[0])
+                id.y = int(v2[1])
+
+                h2_present = True
+                if h3_present:
+                    icons.append(id)
+
+            if s.startswith(MON_HDR + '='):
+                if h3_present:
+                    raise RuntimeError(
+                        f'{fp_} {E_GEN}\n line({lc}): {s}')
+
+                v3 = s[LMON_HDR + 1:]
+                id.m = int(v3)
+
+                h3_present = True
+                if h2_present:
+                    icons.append(id)
+        return icons
+
+    def _LoadNemoMetaIcons(fp_):
+        lines = []
         try:
-            lc = 0
             with open(fp_, 'rt') as file1:
                 lines = file1.readlines()
-                for line in lines:
-                    lc += 1
-                    s = line.strip()
-
-                    if(len(s) == 0):
-                        h1_present = False
-                        h2_present = False
-                        h3_present = False
-
-                        continue
-
-                    if skip_block:
-                        if not s.startswith('['):
-                            continue
-                        else:
-                            skip_block = False
-
-                    if s.startswith(f'[{DESK_MON_HDR}'):
-                        skip_block = True
-                        h1_present = False
-                        h2_present = False
-                        h3_present = False
-                        continue
-
-                    if s.startswith("["):
-                        h1_present = True
-                        h2_present = False
-                        h3_present = False
-
-                        n = s.strip('[]')
-                        id = IconData({})
-                        id.fp = META_PATH_HOLDER
-                        id.name = n
-                        continue
-
-                    if not h1_present:
-                        raise RuntimeError(f'{fp_} {E_GEN}\n line({lc}): {s}')
-
-                    if s.startswith(NIC_HDR + '='):
-
-                        if h2_present:
-                            raise RuntimeError(
-                                f'{fp_} {E_GEN}\n line({lc}): {s}')
-
-                        v2 = s[LNIC_HDR + 1:].split(',')
-                        id.x = int(v2[0])
-                        id.y = int(v2[1])
-
-                        h2_present = True
-                        if h3_present:
-                            icons.append(id)
-
-                    if s.startswith(MON_HDR + '='):
-
-                        if h3_present:
-                            raise RuntimeError(
-                                f'{fp_} {E_GEN}\n line({lc}): {s}')
-
-                        v3 = s[LMON_HDR + 1:]
-                        id.m = int(v3)
-
-                        h3_present = True
-                        if h2_present:
-                            icons.append(id)
-
         except Exception as e:
             print(f'_LoadNemoMetaIcons exception:\n{e}')
 
+        icons = IcMan._ProcessLines_LoadNemoMetaIcons(lines)
         return icons
 
-    def _ApplyNemoMetaDesktop(fp_, meta_icons_, mon_cnt_):
-        if len(meta_icons_) == 0:
-            return
-
-        meta_dict = {}
-        for o in meta_icons_:
-            meta_dict[o.name] = o
-
-        out_line = []
-        lines = []
+    def _ProcessLines_ApplyNemoMetaDesktop(lines_, meta_dict_, fp_, mon_cnt_):
+        lc = 0
         skip_block = False
         processing_block = False
         curr_o = IconData({})
+        out_line = []
 
-        try:
-            lc = 0
-            with open(fp_, 'rt') as file1:
-                lines = file1.readlines()
-        except Exception as e:
-            print(f'_LoadNemoMetaIcons read exception:\n{e}')
-            return
-
-        for line in lines:
+        for line in lines_:
             lc += 1
             s = line.strip()
 
@@ -480,13 +461,13 @@ class IcMan:
                 processing_block = True
                 n = s.strip('[]')
 
-                if n not in meta_dict:
+                if n not in meta_dict_:
                     skip_block = True
                     out_line.append(s + '\n')
                     # print('3>>> ' + out_line[len(out_line) - 1])
                     continue
                 else:
-                    curr_o = meta_dict[n]
+                    curr_o = meta_dict_[n]
 
             if not processing_block:
                 raise RuntimeError(f'{fp_} {E_GEN}\n line({lc}): {s}')
@@ -501,6 +482,27 @@ class IcMan:
                 out_line.append(s + '\n')
                 # print('5>>> ' + out_line[len(out_line) - 1])
 
+        return out_line
+
+    def _ApplyNemoMetaDesktop(fp_, meta_icons_, mon_cnt_):
+        if len(meta_icons_) == 0:
+            return
+
+        lines = []
+        meta_dict = {}
+
+        try:
+            with open(fp_, 'rt') as file1:
+                lines = file1.readlines()
+        except Exception as e:
+            print(f'_LoadNemoMetaIcons read exception:\n{e}')
+            return
+
+        for o in meta_icons_:
+            meta_dict[o.name] = o
+        out_line = IcMan._ProcessLines_ApplyNemoMetaDesktop(lines, meta_dict,
+                                                            fp_, mon_cnt_)
+
         if len(out_line) > 0:
             with open(fp_, "wt") as outf:
                 str = ''.join(out_line)
@@ -508,7 +510,6 @@ class IcMan:
                 outf.write(str)
 
     def SaveCurrentConfig(self):
-
         monitors = GetMonitorsInfo()
         name_tpl = '0x0'
 
@@ -534,7 +535,21 @@ class IcMan:
             self.configs[gfjn(fp)] = icons
 
     def _KillNemoDesktop():
-        subprocess.run(['killall', f'{NEMO_DESKTOP_NAME}'])
+        subprocess.run(f'killall -u $(whoami) {NEMO_DESKTOP_NAME}',
+                       shell=True)
+
+    def _CheckNemoDesktopRunning():
+        s = f'pgrep -u $(whoami) {NEMO_DESKTOP_NAME}'
+        # print(f'Running:\n{s}')
+        try:
+            lines = subprocess.run(s, shell=True, check=True,
+                                   capture_output=True, text=True
+                                   ).stdout.splitlines()
+        except Exception:
+            return False
+        # sout = '\n'.join(lines)
+        # print(f'Result:\n{sout}')
+        return len(lines) > 0
 
     def _StartNemoDesktop():
         subprocess.Popen(f'{NEMO_DESKTOP_NAME}')
@@ -543,15 +558,7 @@ class IcMan:
         IcMan._KillNemoDesktop()
         IcMan._StartNemoDesktop()
 
-#   def ShakeIcon(_fp):
-#       name = gfjn(_fp)
-#       tmp_fp = f'{HOME_DIR}/{name}.{DATA_FILE_EXT}'
-#       os.rename(_fp, tmp_fp)
-#       os.rename(tmp_fp, _fp)
-#       # print ("Moved: ", _fp, " <==> ", tmp_fp)
-
     def ApplyConfig(self, name_):
-
         if name_ not in self.configs:
             print(f'Invalid condig name: {name_}')
             return
@@ -575,6 +582,10 @@ class IcMan:
 
             # IcMan.ShakeIcon(o.fp)
 
+        while IcMan._CheckNemoDesktopRunning():
+            IcMan._KillNemoDesktop()
+            time.sleep(1)
+
         IcMan._ApplyNemoMetaDesktop(NEMO_META_PATH, meta_icons, mon_cnt)
         IcMan._StartNemoDesktop()
 
@@ -583,7 +594,6 @@ class IcMan:
         return fp
 
     def DeleteConfig(self, name_):
-
         fp = IcMan.GetConfigFullPath(name_)
         print('CTD: ', fp)
         if os.path.exists(fp):
@@ -591,7 +601,6 @@ class IcMan:
         self.configs.pop(name_, None)
 
     def Rename(self, new_name_, old_name_):
-
         if new_name_ != old_name_:
             fp_old = IcMan.GetConfigFullPath(old_name_)
             fp_new = IcMan.GetConfigFullPath(new_name_)
@@ -603,7 +612,12 @@ class IcMan:
                 os.rename(fp_old, fp_new)
             self.configs[new_name_] = self.configs.pop(old_name_)
 
-
+#   def ShakeIcon(_fp):
+#       name = gfjn(_fp)
+#       tmp_fp = f'{HOME_DIR}/{name}.{DATA_FILE_EXT}'
+#       os.rename(_fp, tmp_fp)
+#       os.rename(tmp_fp, _fp)
+#       # print ("Moved: ", _fp, " <==> ", tmp_fp)
 ############################################################################
 
 
@@ -613,7 +627,6 @@ GRID_LB_VERT_SIZE = 6
 class MainWnd:
 
     def __init__(self, root_, icman_):
-
         self.icman = icman_
         self.root = root_
 
@@ -653,7 +666,6 @@ class MainWnd:
         #                column=3, row=2, sticky=E)
 
     def _RefreshList(self):
-
         names_ts = []
         names = list(self.icman.configs.keys())
         for n in names:
@@ -717,7 +729,6 @@ def GuiMain(icman_):
 
 
 def main():
-
     if shutil.which('gio') is None:
         print('gio not found')
         return 1
