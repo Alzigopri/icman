@@ -75,8 +75,11 @@ class Monitor:
     x = y = w = h = 0
     name = ""
 
-    def __init__(self, **entries):
-        self.__dict__.update(entries)
+    def __init__(self, *args, **kwargs):
+        if len(args) > 0:
+            self.__dict__.update(args[0])
+        else:
+            self.__dict__.update(kwargs)
 
     def __str__(self):
         return str(vars(self))
@@ -216,8 +219,11 @@ class IconData:
     x = y = 0
     m = 0
 
-    def __init__(self, entries):
-        self.__dict__.update(entries)
+    def __init__(self, *args, **kwargs):
+        if len(args) > 0:
+            self.__dict__.update(args[0])
+        else:
+            self.__dict__.update(kwargs)
 
     def __str__(self):
         # return f"{{{self.path=}, {self.x=}, {self.y=}}}"
